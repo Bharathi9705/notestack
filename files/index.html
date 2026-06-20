@@ -234,7 +234,7 @@
       position: relative;
       cursor: pointer;
       transition: border-color var(--tr), transform var(--tr), box-shadow var(--tr);
-      animation: fadeUp .18s ease both;
+      animation: fadeUp .5s cubic-bezier(.16,1,.3,1) both;
     }
     .note-card:hover {
       border-color: rgba(99,102,241,.28);
@@ -585,7 +585,7 @@
 
     /* ── ANIMATIONS ── */
     @keyframes spin    { to { transform: rotate(360deg); } }
-    @keyframes fadeUp  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    @keyframes fadeUp  { from{opacity:0;transform:translateY(28px) scale(.96)} to{opacity:1;transform:none} }
     @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
 
     /* ── RESPONSIVE ── */
@@ -876,7 +876,7 @@
     }
 
     /* ── FIX: Disable animations when Settings toggle is off ── */
-    body.no-anim .note-card { animation: none !important; }
+    body.no-anim .note-card { animation: none !important; opacity: 1 !important; transform: none !important; }
     body.no-anim * { transition-duration: .01ms !important; }
   </style>
 </head>
@@ -1293,11 +1293,13 @@
       return;
     }
 
-    filtered.forEach(note => {
+    filtered.forEach((note, idx) => {
       const card = document.createElement("div");
       card.className = "note-card";
       // FIX: Set CSS custom property so card-indicator picks it up
       card.style.setProperty("--accent-color", note.color || "#8B5CF6");
+      // Staggered entrance — each card animates in slightly after the previous one
+      card.style.animationDelay = `${Math.min(idx * 0.05, 0.5)}s`;
 
       card.innerHTML = `
         <div class="card-indicator"></div>
@@ -1618,6 +1620,8 @@
     localStorage.setItem("ns-animations", isOn ? "on" : "off");
     document.body.classList.toggle("no-anim", !isOn);
     toast(isOn ? "Animations enabled" : "Animations disabled");
+    // FIX: Re-render the grid immediately so the toggle's effect is visible right away
+    renderNotes();
   });
 
   // ── Sub-view switching ──

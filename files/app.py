@@ -1,6 +1,6 @@
 """
-NoteStack — app.py (v3.3 — Complete Routing Resolution)
-All CSS and JS are inline inside index.html, so Flask only needs
+NoteStack – app.py  (v3 — single file frontend)
+All CSS and JS are now inline inside index.html, so Flask only needs
 to serve one file. No more missing style.css / script.js 404 errors.
 """
 
@@ -72,7 +72,7 @@ def note_dict(row):
     d["pinned"] = bool(d["pinned"])
     return d
 
-COLORS = {"#7C5CFC", "#F04438", "#12B76A", "#F79009", "#0EA5E9", "#EC4899", "#8B5CF6", "#F43F5E", "#10B981", "#F59E0B", "#38BDF8"}
+COLORS = {"#7C5CFC","#F04438","#12B76A","#F79009","#0EA5E9","#EC4899"}
 
 def validate(data):
     errors = {}
@@ -89,7 +89,7 @@ def validate(data):
     return {"title": title, "content": content, "color": color, "pinned": int(pinned)}
 
 
-# ── Notes Blueprint ───────────────────────────────────────────────────────────
+# ── Blueprint ─────────────────────────────────────────────────────────────────
 bp = Blueprint("notes", __name__, url_prefix="/notes")
 
 @bp.get("/")
@@ -171,51 +171,13 @@ def delete_note(nid):
     return ok({"id": nid, "deleted": True})
 
 
-# ── Account Blueprint (FIXED) ─────────────────────────────────────────────────
-account_state = {
-    "name": "Admin User",
-    "email": "admin@notestack.io"
-}
-
-account_bp = Blueprint("account", __name__, url_prefix="/account")
-
-@account_bp.route("/profile", methods=["GET", "POST"])
-@account_bp.route("/profile/", methods=["GET", "POST"])
-def manage_profile():
-    if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        new_name = data.get("name", "").strip()
-        if not new_name:
-            return jsonify({"ok": False, "error": "Name cannot be empty."}), 400
-        account_state["name"] = new_name
-        log.info("Profile name updated to: %s", new_name)
-    return jsonify({"ok": True, "data": account_state})
-
-@account_bp.route("/signout", methods=["GET"])
-@account_bp.route("/signout/", methods=["GET"])
-def handle_signout():
-    log.info("Account profile session terminated.")
-    return """
-    <html>
-        <body style="background:#050816; color:#F1F5F9; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh;">
-            <div style="text-align:center; max-width:400px; padding:2rem; background:#080D1A; border:1px solid rgba(255,255,255,0.06); border-radius:12px;">
-                <h2 style="margin-bottom:0.5rem; font-weight:800;">Signed Out Securely</h2>
-                <p style="color:#94A3B8; margin-bottom:1.5rem; font-size:0.9rem;">You have safely exited the NoteStack workspace session.</p>
-                <a href="/" style="display:inline-block; background:linear-gradient(135deg,#6366F1,#8B5CF6); color:#fff; text-decoration:none; padding:0.6rem 1.2rem; font-size:0.85rem; font-weight:600; border-radius:6px;">Return to App Workspace</a>
-            </div>
-        </body>
-    </html>
-    """
-
-
-# ── App Factory ───────────────────────────────────────────────────────────────
+# ── App factory ───────────────────────────────────────────────────────────────
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    CORS(app, resources={r"/notes*": {"origins": "*"}})
     app.teardown_appcontext(close_db)
     app.register_blueprint(bp)
-    app.register_blueprint(account_bp)
 
     @app.errorhandler(404)
     def not_found(_): return err("Route not found.", 404)
@@ -224,6 +186,7 @@ def create_app():
     @app.errorhandler(500)
     def internal(_): return err("Internal server error.", 500)
 
+    # Serve the single index.html file (CSS+JS are inline inside it)
     @app.get("/")
     def index():
         return send_from_directory(app.root_path, "index.html")
