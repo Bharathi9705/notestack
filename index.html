@@ -233,15 +233,17 @@
       gap: .6rem;
       position: relative;
       cursor: pointer;
-      transition: border-color var(--tr), transform var(--tr), box-shadow var(--tr);
+      transition: border-color var(--tr), transform var(--tr), box-shadow var(--tr), background var(--tr);
       animation: fadeUp .5s cubic-bezier(.16,1,.3,1) both;
     }
+    /* ── FIX: Hover now uses the note's OWN accent color, not a fixed purple ──
+       Border, glow, and a subtle background tint all pick up --accent-color */
     .note-card:hover {
-      border-color: rgba(99,102,241,.28);
+      border-color: var(--accent-color, var(--p1));
       transform: translateY(-2px);
-      box-shadow: 0 8px 28px rgba(0,0,0,.3);
+      box-shadow: 0 8px 28px rgba(0,0,0,.3), 0 0 0 1px var(--accent-color, var(--p1)) inset;
+      background: var(--bg-3);
     }
-    /* ── FIX: Left accent bar uses --accent-color CSS var set per card ── */
     .card-indicator {
       position: absolute;
       left: 0; top: 1rem; bottom: 1rem;
@@ -249,6 +251,16 @@
       border-radius: 0 2px 2px 0;
       background: var(--accent-color, var(--p1));
       transition: background var(--tr);
+      box-shadow: 0 0 12px var(--accent-color, var(--p1));
+    }
+    /* ── NEW: Colored dot next to the title so accent color is visible at a glance ── */
+    .note-title-row { display: flex; align-items: center; gap: .5rem; }
+    .title-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent-color, var(--p1));
+      flex-shrink: 0;
+      box-shadow: 0 0 6px var(--accent-color, var(--p1));
     }
     .note-title {
       font-size: .92rem;
@@ -295,17 +307,22 @@
     }
     .card-btn:hover { background: var(--bg-3); color: var(--tx); border-color: rgba(255,255,255,.1); }
     .card-btn.del:hover { background: var(--danger-d); color: var(--danger); border-color: rgba(244,63,94,.3); }
-    .card-btn.pinned { color: var(--c-amber); border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+    /* ── FIX: Pinned button now uses the note's accent color instead of fixed amber ── */
+    .card-btn.pinned {
+      color: var(--accent-color, var(--c-amber));
+      border-color: var(--accent-color, var(--c-amber));
+      background: color-mix(in srgb, var(--accent-color, var(--c-amber)) 12%, transparent);
+    }
 
-    /* Pin badge */
+    /* ── FIX: Pin badge now uses the note's own accent color ── */
     .pin-badge {
       font-size: .6rem;
       font-weight: 700;
       letter-spacing: .06em;
       text-transform: uppercase;
-      color: var(--p3);
-      background: var(--p-dim);
-      border: 1px solid var(--bd-p);
+      color: var(--accent-color, var(--p3));
+      background: color-mix(in srgb, var(--accent-color, var(--p3)) 14%, transparent);
+      border: 1px solid var(--accent-color, var(--bd-p));
       border-radius: 4px;
       padding: .08rem .38rem;
     }
@@ -1306,7 +1323,10 @@
       card.innerHTML = `
         <div class="card-indicator"></div>
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;">
-          <h4 class="note-title">${esc(note.title)}</h4>
+          <div class="note-title-row">
+            <span class="title-dot"></span>
+            <h4 class="note-title">${esc(note.title)}</h4>
+          </div>
           ${note.pinned ? `<span class="pin-badge">Pinned</span>` : ""}
         </div>
         <p class="note-body">${esc(note.content)}</p>
