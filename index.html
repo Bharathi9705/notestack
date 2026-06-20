@@ -1130,7 +1130,9 @@
   // ─────────────────────────────────────────────
   //  CONFIG
   // ─────────────────────────────────────────────
-  const BASE = "http://127.0.0.1:5000";
+  // FIX: was hardcoded to "http://127.0.0.1:5000" which only works locally.
+  // Empty string means "same origin as the page" — works on localhost AND on Render.
+  const BASE = "";
   const g = id => document.getElementById(id);
 
   const COLOR_NAMES = {
