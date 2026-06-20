@@ -46,7 +46,7 @@ def init_db(app):
                 title      TEXT    NOT NULL CHECK(length(title)   <= 120),
                 content    TEXT    NOT NULL CHECK(length(content) <= 10000),
                 pinned     INTEGER NOT NULL DEFAULT 0,
-                color      TEXT    NOT NULL DEFAULT '#7C5CFC',
+                color      TEXT    NOT NULL DEFAULT '#8B5CF6',
                 created_at TEXT    NOT NULL,
                 updated_at TEXT    NOT NULL
             );
@@ -72,19 +72,19 @@ def note_dict(row):
     d["pinned"] = bool(d["pinned"])
     return d
 
-COLORS = {"#7C5CFC","#F04438","#12B76A","#F79009","#0EA5E9","#EC4899"}
+COLORS = {"#8B5CF6","#F43F5E","#10B981","#F59E0B","#38BDF8","#EC4899"}
 
 def validate(data):
     errors = {}
     title   = str(data.get("title",   "") or "").strip()
     content = str(data.get("content", "") or "").strip()
-    color   = str(data.get("color",   "#7C5CFC")).strip()
+    color   = str(data.get("color",   "#8B5CF6")).strip()
     pinned  = bool(data.get("pinned", False))
     if not title:               errors["title"]   = "Title is required."
     elif len(title) > 120:      errors["title"]   = "Title must be ≤ 120 characters."
     if not content:             errors["content"] = "Content is required."
     elif len(content) > 10000:  errors["content"] = "Content must be ≤ 10 000 characters."
-    if color not in COLORS: color = "#7C5CFC"
+    if color not in COLORS: color = "#8B5CF6"
     if errors: raise ValueError(errors)
     return {"title": title, "content": content, "color": color, "pinned": int(pinned)}
 
