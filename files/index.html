@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+  // FIX: Apply saved theme immediately, before CSS paints, so toggle persists on reload
+  document.documentElement.dataset.theme = localStorage.getItem("ns-theme") || "dark";
+</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NoteStack — Workspace</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #050816;
+      --bg-1:      #080D1A;
+      --bg-2:      #0D1526;
+      --bg-3:      #111C30;
+      --bg-4:      #16243C;
+      --p1:        #6366F1;
+      --p2:        #8B5CF6;
+      --p3:        #A78BFA;
+      --p-dim:     rgba(99,102,241,.12);
+      --p-glow:    rgba(99,102,241,.25);
+      --p-grad:    linear-gradient(135deg,#6366F1,#8B5CF6);
+      --c-violet:  #8B5CF6;
+      --c-rose:    #F43F5E;
+      --c-emerald: #10B981;
+      --c-amber:   #F59E0B;
+      --c-sky:     #38BDF8;
+      --bd:        rgba(255,255,255,.06);
+      --bd-s:      rgba(255,255,255,.03);
+      --bd-p:      rgba(99,102,241,.22);
+      --tx:        #F1F5F9;
+      --tx-2:      #94A3B8;
+      --tx-3:      #475569;
+      --danger:    #F43F5E;
+      --danger-d:  rgba(244,63,94,.12);
+      --success:   #10B981;
+      --sw:   260px;
+      --ew:   460px;
+      --r:    10px;
+      --rs:   6px;
+      --rl:   16px;
+      --tr:   .15s cubic-bezier(.4,0,.2,1);
+      --f:    'Plus Jakarta Sans', system-ui, sans-serif;
+      --fm:   'DM Mono', monospace;
+    }
+
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background: var(--bg);
+      color: var(--tx);
+      font-family: var(--f);
+      font-size: .9rem;
+      line-height: 1.6;
+      min-height: 100dvh;
+      display: flex;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(99,102,241,.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+    }
+    button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+    input, textarea { font-family:inherit; }
+    .hidden { display:none!important; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sw);
+      height: 100dvh;
+      background: var(--bg-1);
+      border-right: 1px solid var(--bd);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      padding: 1.5rem 1.25rem 1rem;
+    }
+    .logo-mark {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: var(--p-grad);
+      display: flex; align-items:center; justify-content:center;
+      box-shadow: 0 4px 12px rgba(99,102,241,.35);
+    }
+    .logo-text { font-size: .95rem; font-weight: 800; letter-spacing: -.03em; }
+    .logo-text span { color: var(--p3); }
+
+    .btn-new {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      margin: .75rem 1rem;
+      padding: .65rem .85rem;
+      background: var(--p-grad);
+      color: #fff;
+      border-radius: var(--rs);
+      font-size: .82rem;
+      font-weight: 600;
+      transition: opacity var(--tr), transform var(--tr);
+      box-shadow: 0 4px 14px rgba(99,102,241,.3);
+    }
+    .btn-new:hover { opacity: .9; }
+    .btn-new:active { transform: scale(.98); }
+
+    .nav-label {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--tx-3);
+      text-transform: uppercase;
+      padding: 1rem 1.25rem .4rem;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .5rem 1.25rem;
+      margin: .1rem .5rem;
+      border-radius: var(--rs);
+      font-size: .85rem;
+      color: var(--tx-2);
+      transition: background var(--tr), color var(--tr);
+      cursor: pointer;
+    }
+    .nav-item:hover { background: var(--bg-3); color: var(--tx); }
+    .nav-item.active { background: var(--p-dim); color: var(--p3); font-weight: 600; }
+    .nav-item__badge {
+      margin-left: auto;
+      font-family: var(--fm);
+      font-size: .65rem;
+      background: rgba(255,255,255,.04);
+      color: var(--tx-3);
+      padding: .05rem .4rem;
+      border-radius: 10px;
+    }
+    .nav-item.active .nav-item__badge { background: var(--p-dim); color: var(--p3); }
+
+    .sb-footer {
+      margin-top: auto;
+      padding: 1rem;
+      border-top: 1px solid var(--bd-s);
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--p-grad);
+      display: flex; align-items:center; justify-content:center;
+      font-size: .75rem; font-weight: 700;
+    }
+    .avatar-info { min-width:0; }
+    .avatar-name { font-size: .8rem; font-weight: 600; }
+    .avatar-role { font-size: .68rem; color: var(--tx-3); }
+
+    /* ── MAIN ── */
+    .main {
+      flex:1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      min-width: 0;
+      z-index: 1;
+      transition: margin-right var(--tr);
+    }
+    .main.shifted { margin-right: var(--ew); }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 2rem;
+      border-bottom: 1px solid var(--bd);
+      background: rgba(5,8,22,.6);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .header-search {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      background: var(--bg-1);
+      border: 1px solid var(--bd);
+      padding: .5rem .75rem;
+      border-radius: var(--rs);
+      width: 320px;
+      transition: border-color var(--tr), box-shadow var(--tr);
+    }
+    .header-search:focus-within {
+      border-color: var(--p1);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+    }
+    .header-search input {
+      background: none; border: none; outline: none;
+      color: var(--tx); font-size: .82rem; width: 100%;
+    }
+    .header-search input::placeholder { color: var(--tx-3); }
+    .header-search svg { color: var(--tx-3); flex-shrink: 0; }
+    .view-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em; }
+
+    /* ── CONTENT + GRID ── */
+    .content-body { padding: 2rem; flex: 1; }
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* ── NOTE CARD ── */
+    .note-card {
+      background: var(--bg-1);
+      border: 1px solid var(--bd);
+      border-radius: var(--r);
+      padding: 1.25rem 1.25rem 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+      position: relative;
+      cursor: pointer;
+      transition: border-color var(--tr), transform var(--tr), box-shadow var(--tr);
+      animation: fadeUp .18s ease both;
+    }
+    .note-card:hover {
+      border-color: rgba(99,102,241,.28);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0,0,0,.3);
+    }
+    /* ── FIX: Left accent bar uses --accent-color CSS var set per card ── */
+    .card-indicator {
+      position: absolute;
+      left: 0; top: 1rem; bottom: 1rem;
+      width: 3px;
+      border-radius: 0 2px 2px 0;
+      background: var(--accent-color, var(--p1));
+      transition: background var(--tr);
+    }
+    .note-title {
+      font-size: .92rem;
+      font-weight: 700;
+      color: var(--tx);
+      letter-spacing: -.02em;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .note-body {
+      font-size: .8rem;
+      color: var(--tx-2);
+      line-height: 1.6;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+      flex: 1;
+    }
+    .note-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--bd-s);
+      padding-top: .55rem;
+      margin-top: .1rem;
+      gap: .5rem;
+    }
+    .note-date { font-family: var(--fm); font-size: .68rem; color: var(--tx-3); }
+
+    .card-actions { display: flex; gap: .3rem; opacity: 0; transition: opacity var(--tr); }
+    .note-card:hover .card-actions { opacity: 1; }
+    .card-btn {
+      display: flex; align-items:center; justify-content:center;
+      width: 26px; height: 26px;
+      border-radius: 5px;
+      border: 1px solid var(--bd);
+      background: rgba(255,255,255,.03);
+      color: var(--tx-3);
+      transition: all var(--tr);
+    }
+    .card-btn:hover { background: var(--bg-3); color: var(--tx); border-color: rgba(255,255,255,.1); }
+    .card-btn.del:hover { background: var(--danger-d); color: var(--danger); border-color: rgba(244,63,94,.3); }
+    .card-btn.pinned { color: var(--c-amber); border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+
+    /* Pin badge */
+    .pin-badge {
+      font-size: .6rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--p3);
+      background: var(--p-dim);
+      border: 1px solid var(--bd-p);
+      border-radius: 4px;
+      padding: .08rem .38rem;
+    }
+
+    /* ── EMPTY & SKELETON ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .75rem;
+      color: var(--tx-3);
+      padding: 5rem 1rem;
+      grid-column: 1 / -1;
+      text-align: center;
+    }
+    .empty-state p { font-size: .82rem; max-width: 240px; }
+    .empty-cta {
+      display: inline-flex; align-items:center; gap:.4rem;
+      padding: .5rem 1.1rem;
+      background: var(--p-grad);
+      color: #fff;
+      border-radius: var(--rs);
+      font-size: .8rem;
+      font-weight: 600;
+      margin-top: .25rem;
+      border: none; cursor: pointer;
+      box-shadow: 0 2px 12px rgba(99,102,241,.3);
+      transition: opacity var(--tr);
+    }
+    .empty-cta:hover { opacity: .88; }
+
+    /* ── EDITOR DRAWER ── */
+    .editor-panel {
+      position: fixed; right: 0; top: 0; bottom: 0;
+      width: var(--ew);
+      background: var(--bg-1);
+      border-left: 1px solid var(--bd);
+      transform: translateX(100%);
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+    }
+    .editor-panel.open { transform: translateX(0); }
+
+    /* Gradient top edge — updates with selected color */
+    .editor-top-bar {
+      height: 2px;
+      background: var(--p-grad);
+      flex-shrink: 0;
+      transition: background var(--tr);
+    }
+
+    .editor-header {
+      padding: 1.1rem 1.25rem;
+      border-bottom: 1px solid var(--bd);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .editor-header-left { display:flex; flex-direction:column; gap:.08rem; }
+    .editor-mode {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--p3);
+    }
+    .editor-heading { font-size: .9rem; font-weight: 700; letter-spacing: -.02em; }
+
+    .editor-body {
+      padding: 1.25rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .field-group { display: flex; flex-direction: column; gap: .4rem; }
+    .field-label {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      color: var(--tx-3);
+      text-transform: uppercase;
+    }
+    .input-flat {
+      background: var(--bg-2);
+      border: 1px solid var(--bd);
+      border-radius: var(--rs);
+      padding: .6rem .85rem;
+      color: var(--tx);
+      font-size: .88rem;
+      outline: none;
+      transition: border-color var(--tr), box-shadow var(--tr);
+      width: 100%;
+    }
+    .input-flat:focus {
+      border-color: var(--p1);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+    }
+    .textarea-flat {
+      flex: 1;
+      resize: none;
+      min-height: 220px;
+      line-height: 1.7;
+      font-size: .85rem;
+    }
+    .field-error { font-size: .72rem; color: var(--danger); min-height: .9rem; }
+
+    /* ── FIX: Color picker — swatches are buttons, not divs ── */
+    .color-picker { display: flex; gap: .5rem; align-items: center; margin-top: .15rem; }
+    .color-dot {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform var(--tr), border-color var(--tr), box-shadow var(--tr);
+      flex-shrink: 0;
+    }
+    .color-dot:hover { transform: scale(1.2); }
+    /* ── FIX: .active class now correctly applies the white ring ── */
+    .color-dot.active {
+      border-color: rgba(255,255,255,.85);
+      transform: scale(1.15);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.12);
+    }
+    .color-label {
+      font-size: .7rem;
+      color: var(--tx-3);
+      margin-left: .25rem;
+    }
+
+    /* Pin toggle row */
+    .pin-row {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem .85rem;
+      background: var(--bg-2);
+      border: 1px solid var(--bd);
+      border-radius: var(--rs);
+      cursor: pointer;
+      font-size: .82rem;
+      color: var(--tx-2);
+      transition: all var(--tr);
+      user-select: none;
+    }
+    .pin-row:hover { background: var(--bg-3); color: var(--tx); }
+    .pin-row.active { color: var(--p3); border-color: var(--bd-p); background: var(--p-dim); }
+    .pin-row input { display:none; }
+
+    .editor-footer {
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--bd);
+      display: flex;
+      justify-content: flex-end;
+      gap: .65rem;
+      flex-shrink: 0;
+      background: var(--bg-1);
+    }
+
+    .btn-solid {
+      display: inline-flex; align-items:center; gap:.4rem;
+      background: var(--p-grad);
+      color: #fff;
+      padding: .52rem 1.2rem;
+      border-radius: var(--rs);
+      font-size: .82rem;
+      font-weight: 700;
+      border: none; cursor: pointer;
+      transition: opacity var(--tr), transform var(--tr), box-shadow var(--tr);
+      box-shadow: 0 2px 12px rgba(99,102,241,.3);
+    }
+    .btn-solid:hover { opacity: .88; box-shadow: 0 4px 18px rgba(99,102,241,.45); }
+    .btn-solid:active { transform: scale(.97); }
+    .btn-solid:disabled { opacity: .4; pointer-events: none; }
+
+    .btn-outline {
+      border: 1px solid var(--bd);
+      color: var(--tx-2);
+      padding: .52rem 1.1rem;
+      border-radius: var(--rs);
+      font-size: .82rem;
+      font-weight: 500;
+      transition: all var(--tr);
+    }
+    .btn-outline:hover { background: var(--bg-2); color: var(--tx); border-color: rgba(255,255,255,.1); }
+
+    /* Spinner */
+    .spin {
+      display: none;
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    .loading .lbl { display: none; }
+    .loading .spin { display: block; }
+    .loading { pointer-events: none; }
+
+    /* ── DELETE MODAL ── */
+    .modal-bg {
+      position: fixed; inset: 0;
+      background: rgba(3,5,14,.8);
+      z-index: 200;
+      display: flex; align-items:center; justify-content:center;
+      opacity: 0; pointer-events: none;
+      transition: opacity .18s;
+    }
+    .modal-bg.on { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--bg-2);
+      border: 1px solid var(--bd);
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 360px;
+      width: calc(100% - 2rem);
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0,0,0,.6);
+      transform: scale(.94);
+      transition: transform .2s;
+    }
+    .modal-bg.on .modal { transform: scale(1); }
+    .modal-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: var(--danger-d);
+      border: 1px solid rgba(244,63,94,.2);
+      display: flex; align-items:center; justify-content:center;
+      margin: 0 auto .9rem;
+    }
+    .modal h3 { font-size: 1rem; font-weight: 800; margin-bottom: .35rem; }
+    .modal p { font-size: .82rem; color: var(--tx-2); margin-bottom: 1.5rem; line-height: 1.5; }
+    .modal-actions { display: flex; gap: .65rem; justify-content: center; }
+    .btn-danger {
+      display: inline-flex; align-items:center; gap:.4rem;
+      padding: .5rem 1.2rem;
+      background: var(--danger);
+      color: #fff;
+      border-radius: var(--rs);
+      font-size: .82rem; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 2px 12px rgba(244,63,94,.3);
+      transition: filter var(--tr), box-shadow var(--tr);
+    }
+    .btn-danger:hover { filter: brightness(1.1); box-shadow: 0 4px 18px rgba(244,63,94,.45); }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem; right: 1.5rem;
+      z-index: 300;
+      display: flex; align-items:center; gap:.5rem;
+      padding: .55rem 1rem;
+      border-radius: var(--rs);
+      font-size: .78rem; font-weight: 600;
+      border: 1px solid var(--bd);
+      background: var(--bg-3);
+      opacity: 0; pointer-events:none;
+      transform: translateY(10px);
+      transition: opacity .2s, transform .2s;
+      white-space: nowrap;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    .toast.on { opacity: 1; transform: translateY(0); }
+    .toast.ok  { background: rgba(16,185,129,.12); color: var(--success); border-color: rgba(16,185,129,.25); }
+    .toast.bad { background: rgba(244,63,94,.12);  color: var(--danger);  border-color: rgba(244,63,94,.25); }
+    .toast-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .toast.ok  .toast-dot { background: var(--success); }
+    .toast.bad .toast-dot { background: var(--danger); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes fadeUp  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:768px){
+      .sidebar { display: none; }
+      .page-header { padding: 1rem; }
+      .header-search { width: 100%; }
+      .content-body { padding: 1rem; }
+      .editor-panel { width: 100vw; }
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.07); border-radius: 2px; }
+
+    /* ── SIDEBAR FOOTER — clickable ── */
+    .sb-footer {
+      cursor: pointer;
+      transition: background var(--tr);
+      border-radius: var(--rs);
+      margin: 0 .35rem .35rem;
+      padding: .75rem;
+    }
+    .sb-footer:hover { background: var(--bg-3); }
+
+    /* ── PROFILE PANEL ── */
+    .profile-panel {
+      position: fixed;
+      left: var(--sw);
+      bottom: 0;
+      width: 300px;
+      background: var(--bg-2);
+      border: 1px solid var(--bd);
+      border-radius: var(--rl);
+      box-shadow: 0 24px 64px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04) inset;
+      z-index: 200;
+      transform: translateX(-8px) translateY(8px);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform .2s cubic-bezier(.4,0,.2,1), opacity .2s;
+      margin-bottom: .5rem;
+      margin-left: .5rem;
+    }
+    .profile-panel.open {
+      transform: translateX(0) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .profile-panel__inner { padding: 1.25rem; display: flex; flex-direction: column; gap: .1rem; }
+
+    .pp-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .pp-avatar-lg {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--p-grad);
+      display: flex; align-items:center; justify-content:center;
+      font-size: 1.2rem; font-weight: 800;
+      box-shadow: 0 0 0 3px var(--bg-2), 0 0 0 5px rgba(99,102,241,.35);
+    }
+    .pp-close {
+      width: 26px; height: 26px;
+      display: flex; align-items:center; justify-content:center;
+      border-radius: 6px;
+      border: 1px solid var(--bd);
+      background: rgba(255,255,255,.03);
+      color: var(--tx-3);
+      transition: all var(--tr);
+    }
+    .pp-close:hover { background: var(--bg-3); color: var(--tx); }
+
+    .pp-identity { margin-bottom: .9rem; }
+    .pp-name { font-size: 1rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .1rem; }
+    .pp-email { font-size: .75rem; color: var(--tx-2); margin-bottom: .55rem; font-family: var(--fm); }
+    .pp-plan-badge {
+      display: inline-flex;
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--p3);
+      background: var(--p-dim);
+      border: 1px solid var(--bd-p);
+      border-radius: 20px;
+      padding: .15rem .6rem;
+    }
+
+    .pp-divider { height: 1px; background: var(--bd-s); margin: .7rem 0; }
+
+    .pp-section-label {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--tx-3);
+      margin-bottom: .4rem;
+      padding: 0 .1rem;
+    }
+
+    /* Stats grid */
+    .pp-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .5rem;
+      margin-bottom: .15rem;
+    }
+    .pp-stat {
+      background: var(--bg-3);
+      border: 1px solid var(--bd);
+      border-radius: var(--rs);
+      padding: .6rem .5rem;
+      text-align: center;
+    }
+    .pp-stat-val {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      color: var(--tx);
+      line-height: 1;
+      margin-bottom: .2rem;
+    }
+    .pp-stat-label { font-size: .62rem; color: var(--tx-3); }
+
+    /* Menu items */
+    .pp-menu { display: flex; flex-direction: column; gap: .1rem; }
+    .pp-menu-item {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .5rem .65rem;
+      border-radius: var(--rs);
+      font-size: .82rem;
+      color: var(--tx-2);
+      cursor: pointer;
+      transition: background var(--tr), color var(--tr);
+    }
+    .pp-menu-item:hover { background: var(--bg-3); color: var(--tx); }
+    .pp-menu-item--danger { color: var(--danger); }
+    .pp-menu-item--danger:hover { background: var(--danger-d); color: var(--danger); }
+
+    /* ── LIGHT THEME — was completely missing, causing toggle to have no effect ── */
+    [data-theme=light] {
+      --bg:   #F1F4FA;
+      --bg-1: #FFFFFF;
+      --bg-2: #F4F6FF;
+      --bg-3: #E8ECFA;
+      --bg-4: #DDE2F5;
+      --bd:   rgba(0,0,0,.07);
+      --bd-s: rgba(0,0,0,.04);
+      --bd-p: rgba(99,102,241,.2);
+      --tx:   #0F1729;
+      --tx-2: #4B5680;
+      --tx-3: #9AA3BE;
+    }
+    [data-theme=light] body::before {
+      background-image: radial-gradient(rgba(99,102,241,.05) 1px, transparent 1px);
+    }
+    [data-theme=light] .page-header {
+      background: rgba(241,244,250,.85);
+    }
+    [data-theme=light] .header-search { background: #fff; }
+
+    /* ── SUB-PANELS inside profile (Edit Profile & Settings) ── */
+    .pp-subpanel {
+      display: none;
+      flex-direction: column;
+      gap: .75rem;
+      padding-top: .5rem;
+    }
+    .pp-subpanel.open { display: flex; }
+
+    .pp-back {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--p3);
+      cursor: pointer;
+      padding: .3rem 0;
+      background: none;
+      border: none;
+      transition: opacity var(--tr);
+    }
+    .pp-back:hover { opacity: .75; }
+
+    .pp-sub-title {
+      font-size: .9rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      color: var(--tx);
+      margin-bottom: .15rem;
+    }
+
+    /* Edit profile inputs */
+    .pp-input {
+      width: 100%;
+      background: var(--bg-3);
+      border: 1px solid var(--bd);
+      border-radius: var(--rs);
+      padding: .52rem .75rem;
+      color: var(--tx);
+      font-size: .82rem;
+      font-family: var(--f);
+      outline: none;
+      transition: border-color var(--tr), box-shadow var(--tr);
+    }
+    .pp-input:focus {
+      border-color: var(--p1);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+    }
+    .pp-input-label {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--tx-3);
+      margin-bottom: .3rem;
+    }
+    .pp-field { display: flex; flex-direction: column; gap: .3rem; }
+
+    .pp-save-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
+      padding: .52rem;
+      background: var(--p-grad);
+      color: #fff;
+      border: none;
+      border-radius: var(--rs);
+      font-size: .82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity var(--tr);
+      box-shadow: 0 2px 12px rgba(99,102,241,.3);
+    }
+    .pp-save-btn:hover { opacity: .88; }
+
+    /* Settings toggles */
+    .pp-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .55rem .65rem;
+      background: var(--bg-3);
+      border: 1px solid var(--bd);
+      border-radius: var(--rs);
+      font-size: .82rem;
+      color: var(--tx-2);
+    }
+    .pp-toggle-row span { display:flex; align-items:center; gap:.5rem; }
+    .toggle-switch {
+      width: 36px; height: 20px;
+      background: var(--bg-4);
+      border-radius: 10px;
+      border: 1px solid var(--bd);
+      position: relative;
+      cursor: pointer;
+      transition: background var(--tr);
+      flex-shrink: 0;
+    }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      background: var(--tx-3);
+      border-radius: 50%;
+      top: 2px; left: 2px;
+      transition: transform var(--tr), background var(--tr);
+    }
+    .toggle-switch.on { background: var(--p-dim); border-color: var(--bd-p); }
+    .toggle-switch.on::after { transform: translateX(16px); background: var(--p1); }
+
+    .pp-danger-zone {
+      padding: .65rem;
+      background: var(--danger-d);
+      border: 1px solid rgba(244,63,94,.2);
+      border-radius: var(--rs);
+      font-size: .78rem;
+      color: var(--danger);
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    /* ── FIX: Disable animations when Settings toggle is off ── */
+    body.no-anim .note-card { animation: none !important; }
+    body.no-anim * { transition-duration: .01ms !important; }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo-wrap">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <h1 class="logo-text">Note<span>Stack</span></h1>
+    </div>
+
+    <button class="btn-new" id="sidebar-new-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      New Note
+    </button>
+
+    <div class="nav-label">Workspace</div>
+
+    <div class="nav-item active" data-filter="all">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      All Notes
+      <span class="nav-item__badge" id="badge-all">0</span>
+    </div>
+    <div class="nav-item" data-filter="pinned">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Pinned
+      <span class="nav-item__badge" id="badge-pinned">0</span>
+    </div>
+
+    <div class="sb-footer" id="profile-trigger">
+      <div class="avatar" id="sb-avatar-letter">U</div>
+      <div class="avatar-info">
+        <div class="avatar-name" id="sb-user-name">Admin User</div>
+        <div class="avatar-role">Enterprise Workspace</div>
+      </div>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--tx-3);flex-shrink:0;margin-left:auto;transition:transform .15s" id="profile-chevron"><path d="M18 15l-6-6-6 6"/></svg>
+    </div>
+  </aside>
+
+  <!-- PROFILE PANEL -->
+  <div class="profile-panel" id="profile-panel">
+    <div class="profile-panel__inner">
+
+      <!-- ═══ MAIN MENU VIEW ═══ -->
+      <div id="pp-view-main">
+        <div class="pp-header">
+          <div class="pp-avatar-lg" id="pp-avatar-lg">U</div>
+          <button class="pp-close" id="pp-close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="pp-identity">
+          <div class="pp-name" id="pp-name-display">Admin User</div>
+          <div class="pp-email">admin@notestack.io</div>
+          <span class="pp-plan-badge">PRO Plan</span>
+        </div>
+
+        <div class="pp-divider"></div>
+
+        <div class="pp-section-label">Workspace Stats</div>
+        <div class="pp-stats">
+          <div class="pp-stat">
+            <div class="pp-stat-val" id="pp-total">—</div>
+            <div class="pp-stat-label">Total Notes</div>
+          </div>
+          <div class="pp-stat">
+            <div class="pp-stat-val" id="pp-pinned">—</div>
+            <div class="pp-stat-label">Pinned</div>
+          </div>
+          <div class="pp-stat">
+            <div class="pp-stat-val">PRO</div>
+            <div class="pp-stat-label">Plan</div>
+          </div>
+        </div>
+
+        <div class="pp-divider"></div>
+
+        <div class="pp-section-label">Account</div>
+        <div class="pp-menu">
+          <div class="pp-menu-item" id="pp-open-edit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Edit Profile
+          </div>
+          <div class="pp-menu-item" id="pp-open-settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Workspace Settings
+          </div>
+          <div class="pp-menu-item" id="pp-theme-toggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <span id="pp-theme-label">Switch to Light Mode</span>
+          </div>
+        </div>
+
+        <div class="pp-divider"></div>
+
+        <div class="pp-menu">
+          <div class="pp-menu-item pp-menu-item--danger" id="pp-signout">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign out
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ EDIT PROFILE SUB-VIEW ═══ -->
+      <div class="pp-subpanel" id="pp-view-edit">
+        <button class="pp-back" id="pp-back-edit">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to account
+        </button>
+        <div class="pp-sub-title">Edit Profile</div>
+        <div class="pp-field">
+          <label class="pp-input-label">Full Name</label>
+          <input type="text" class="pp-input" id="pp-name-input" maxlength="40" placeholder="Your name"/>
+        </div>
+        <button class="pp-save-btn" id="pp-save-name">Save Name</button>
+      </div>
+
+      <!-- ═══ SETTINGS SUB-VIEW ═══ -->
+      <div class="pp-subpanel" id="pp-view-settings">
+        <button class="pp-back" id="pp-back-settings">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to account
+        </button>
+        <div class="pp-sub-title">Settings</div>
+        <div class="pp-toggle-row">
+          <span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/><circle cx="12" cy="12" r="5"/></svg>
+            Enable Note Animations
+          </span>
+          <div class="toggle-switch on" id="pp-anim-toggle"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <main class="main" id="main-panel">
+    <header class="page-header">
+      <div class="view-title" id="page-title">All Notes</div>
+      <div class="header-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="global-search" placeholder="Search workspace…"/>
+      </div>
+    </header>
+
+    <section class="content-body">
+      <div class="notes-grid" id="notes-container"></div>
+    </section>
+  </main>
+
+  <!-- EDITOR DRAWER -->
+  <div class="editor-panel" id="editor-drawer">
+    <!-- Top accent bar — changes with color selection -->
+    <div class="editor-top-bar" id="editor-top-bar"></div>
+
+    <div class="editor-header">
+      <div class="editor-header-left">
+        <span class="editor-mode" id="editor-mode-label">New Note</span>
+        <span class="editor-heading" id="drawer-title">Create a note</span>
+      </div>
+      <button class="card-btn" id="close-drawer-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="editor-body">
+      <!-- Title -->
+      <div class="field-group">
+        <label class="field-label">Title</label>
+        <input type="text" id="note-title-input" class="input-flat" placeholder="Name your note…" maxlength="120"/>
+        <span class="field-error" id="err-title"></span>
+      </div>
+
+      <!-- Content -->
+      <div class="field-group" style="flex:1;display:flex;flex-direction:column;">
+        <label class="field-label">Content</label>
+        <textarea id="note-content-input" class="input-flat textarea-flat" placeholder="Write something…" maxlength="10000"></textarea>
+        <span class="field-error" id="err-content"></span>
+      </div>
+
+      <!-- Accent Color -->
+      <div class="field-group">
+        <label class="field-label">Accent Color</label>
+        <div class="color-picker" id="color-selectors">
+          <div class="color-dot active" data-color="#8B5CF6" style="background:#8B5CF6" title="Violet"></div>
+          <div class="color-dot" data-color="#F43F5E" style="background:#F43F5E" title="Rose"></div>
+          <div class="color-dot" data-color="#10B981" style="background:#10B981" title="Emerald"></div>
+          <div class="color-dot" data-color="#F59E0B" style="background:#F59E0B" title="Amber"></div>
+          <div class="color-dot" data-color="#38BDF8" style="background:#38BDF8" title="Sky"></div>
+          <div class="color-dot" data-color="#EC4899" style="background:#EC4899" title="Pink"></div>
+        </div>
+        <span id="color-name-label" class="color-label">Violet</span>
+      </div>
+
+      <!-- Pin -->
+      <div class="field-group">
+        <label class="field-label">Priority</label>
+        <label class="pin-row" id="pin-row">
+          <input type="checkbox" id="pin-checkbox"/>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Pin this note to top
+        </label>
+      </div>
+    </div>
+
+    <div class="editor-footer">
+      <button class="btn-outline" id="cancel-drawer-btn">Cancel</button>
+      <button class="btn-solid" id="save-note-btn">
+        <span class="lbl">Save Changes</span>
+        <span class="spin"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- DELETE MODAL -->
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal">
+      <div class="modal-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </div>
+      <h3>Delete this note?</h3>
+      <p>This will permanently remove the note from your workspace. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-outline" id="modal-cancel">Cancel</button>
+        <button class="btn-danger" id="modal-confirm">
+          <span class="lbl">Delete</span><span class="spin"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast">
+    <div class="toast-dot"></div>
+    <span id="toast-msg"></span>
+  </div>
+
+  <script>
+  "use strict";
+
+  // ─────────────────────────────────────────────
+  //  CONFIG
+  // ─────────────────────────────────────────────
+  const BASE = "http://127.0.0.1:5000";
+  const g = id => document.getElementById(id);
+
+  const COLOR_NAMES = {
+    "#8B5CF6": "Violet",
+    "#F43F5E": "Rose",
+    "#10B981": "Emerald",
+    "#F59E0B": "Amber",
+    "#38BDF8": "Sky",
+    "#EC4899": "Pink",
+  };
+
+  // ─────────────────────────────────────────────
+  //  STATE
+  // ─────────────────────────────────────────────
+  let state = {
+    notes:          [],
+    filter:         "all",
+    query:          "",
+    editingId:      null,
+    selectedColor:  "#8B5CF6",
+    deleteId:       null,
+    toastTimer:     null,
+  };
+
+  // ─────────────────────────────────────────────
+  //  DOM
+  // ─────────────────────────────────────────────
+  const DOM = {
+    container:    g("notes-container"),
+    search:       g("global-search"),
+    newBtn:       g("sidebar-new-btn"),
+    drawer:       g("editor-drawer"),
+    edTopBar:     g("editor-top-bar"),
+    edModeLabel:  g("editor-mode-label"),
+    drawerTitle:  g("drawer-title"),
+    mainPanel:    g("main-panel"),
+    closeBtn:     g("close-drawer-btn"),
+    cancelBtn:    g("cancel-drawer-btn"),
+    saveBtn:      g("save-note-btn"),
+    titleInput:   g("note-title-input"),
+    contentInput: g("note-content-input"),
+    pinCheckbox:  g("pin-checkbox"),
+    pinRow:       g("pin-row"),
+    errTitle:     g("err-title"),
+    errContent:   g("err-content"),
+    colorDots:    document.querySelectorAll(".color-dot"),
+    colorLabel:   g("color-name-label"),
+    pageTitle:    g("page-title"),
+    badgeAll:     g("badge-all"),
+    badgePinned:  g("badge-pinned"),
+    navItems:     document.querySelectorAll(".nav-item"),
+    modalBg:      g("modal-bg"),
+    modalCancel:  g("modal-cancel"),
+    modalConfirm: g("modal-confirm"),
+    toast:        g("toast"),
+    toastMsg:     g("toast-msg"),
+  };
+
+  // ─────────────────────────────────────────────
+  //  TOAST
+  // ─────────────────────────────────────────────
+  function toast(msg, type = "ok") {
+    clearTimeout(state.toastTimer);
+    DOM.toastMsg.textContent = msg;
+    DOM.toast.className = `toast ${type} on`;
+    state.toastTimer = setTimeout(() => DOM.toast.className = "toast", 3000);
+  }
+
+  // ─────────────────────────────────────────────
+  //  API LAYER
+  //  FIX: All methods now unwrap the {ok, data} envelope
+  //  and return just the note/array — not the wrapper object.
+  // ─────────────────────────────────────────────
+  const API = {
+    async _req(path, opts = {}) {
+      const res  = await fetch(BASE + path, {
+        headers: { "Content-Type": "application/json" },
+        ...opts,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      return json;
+    },
+
+    // FIX #1: Was returning the full envelope {ok,data,meta}.
+    // Now correctly returns the notes array from json.data
+    async fetchAll() {
+      const json = await this._req("/notes/");
+      return json.data;  // ← array of notes
+    },
+
+    // FIX #2: Was returning {ok,data}. Now returns json.data (the note object)
+    async create(note) {
+      const json = await this._req("/notes/", {
+        method: "POST",
+        body: JSON.stringify(note),
+      });
+      return json.data;  // ← the created note
+    },
+
+    // FIX #3: Was returning {ok,data}. Now returns json.data (the updated note)
+    async update(id, payload) {
+      const json = await this._req(`/notes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      return json.data;  // ← the updated note
+    },
+
+    // FIX #4: Pin toggle must use PATCH /notes/:id/pin — NOT PUT.
+    // PUT requires title+content and would cause 422 validation error.
+    async togglePin(id) {
+      const json = await this._req(`/notes/${id}/pin`, { method: "PATCH" });
+      return json.data;  // ← the updated note
+    },
+
+    async delete(id) {
+      return this._req(`/notes/${id}`, { method: "DELETE" });
+    },
+  };
+
+  // ─────────────────────────────────────────────
+  //  ESCAPE HTML
+  // ─────────────────────────────────────────────
+  const esc = s => String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+
+  const fmt = iso => new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric"
+  });
+
+  // ─────────────────────────────────────────────
+  //  RENDER
+  // ─────────────────────────────────────────────
+  function renderNotes() {
+    DOM.container.innerHTML = "";
+
+    const filtered = state.notes.filter(n => {
+      const q  = state.query.toLowerCase();
+      const match = !q || n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q);
+      if (state.filter === "pinned") return n.pinned && match;
+      return match;
+    });
+
+    // Update badges
+    DOM.badgeAll.textContent    = state.notes.length;
+    DOM.badgePinned.textContent = state.notes.filter(n => n.pinned).length;
+
+    if (filtered.length === 0) {
+      DOM.container.innerHTML = `
+        <div class="empty-state">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--tx-3)" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <p>${state.filter === "pinned" ? "No pinned notes yet." : "No notes found. Create your first one."}</p>
+          <button class="empty-cta" onclick="openDrawer()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            New Note
+          </button>
+        </div>`;
+      return;
+    }
+
+    filtered.forEach(note => {
+      const card = document.createElement("div");
+      card.className = "note-card";
+      // FIX: Set CSS custom property so card-indicator picks it up
+      card.style.setProperty("--accent-color", note.color || "#8B5CF6");
+
+      card.innerHTML = `
+        <div class="card-indicator"></div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem;">
+          <h4 class="note-title">${esc(note.title)}</h4>
+          ${note.pinned ? `<span class="pin-badge">Pinned</span>` : ""}
+        </div>
+        <p class="note-body">${esc(note.content)}</p>
+        <div class="note-footer">
+          <span class="note-date">${note.updated_at ? fmt(note.updated_at) : "Just now"}</span>
+          <div class="card-actions">
+            <button class="card-btn ${note.pinned ? "pinned" : ""}" data-action="pin" title="${note.pinned ? "Unpin" : "Pin"}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="${note.pinned ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </button>
+            <button class="card-btn" data-action="edit" title="Edit">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+            </button>
+            <button class="card-btn del" data-action="delete" title="Delete">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>`;
+
+      card.addEventListener("click", e => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) { openDrawer(note); return; }
+        e.stopPropagation();
+        if (btn.dataset.action === "pin")    handlePin(note.id);
+        if (btn.dataset.action === "edit")   openDrawer(note);
+        if (btn.dataset.action === "delete") openModal(note.id);
+      });
+
+      DOM.container.appendChild(card);
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  //  COLOR PICKER
+  // ─────────────────────────────────────────────
+  function setColor(color) {
+    state.selectedColor = color;
+    // Update swatch active state
+    DOM.colorDots.forEach(d => d.classList.toggle("active", d.dataset.color === color));
+    // Update editor top accent bar
+    DOM.edTopBar.style.background = color;
+    // Update label
+    DOM.colorLabel.textContent = COLOR_NAMES[color] || color;
+    // Update label color to match
+    DOM.colorLabel.style.color = color;
+  }
+
+  // ─────────────────────────────────────────────
+  //  EDITOR DRAWER
+  // ─────────────────────────────────────────────
+  function openDrawer(note = null) {
+    const isEdit = !!note;
+    state.editingId = isEdit ? note.id : null;
+
+    DOM.edModeLabel.textContent  = isEdit ? "Edit Note"   : "New Note";
+    DOM.drawerTitle.textContent  = isEdit ? `Editing #${note.id}` : "Create a note";
+    DOM.titleInput.value         = isEdit ? note.title    : "";
+    DOM.contentInput.value       = isEdit ? note.content  : "";
+    DOM.pinCheckbox.checked      = isEdit ? note.pinned   : false;
+    DOM.pinRow.classList.toggle("active", isEdit ? note.pinned : false);
+    DOM.errTitle.textContent     = "";
+    DOM.errContent.textContent   = "";
+    DOM.titleInput.style.outline   = "";
+    DOM.contentInput.style.outline = "";
+
+    setColor(isEdit ? (note.color || "#8B5CF6") : "#8B5CF6");
+
+    DOM.drawer.classList.add("open");
+    DOM.mainPanel.classList.add("shifted");
+    requestAnimationFrame(() => (isEdit ? DOM.contentInput : DOM.titleInput).focus());
+  }
+
+  function closeDrawer() {
+    DOM.drawer.classList.remove("open");
+    DOM.mainPanel.classList.remove("shifted");
+    DOM.titleInput.style.outline   = "";
+    DOM.contentInput.style.outline = "";
+    DOM.errTitle.textContent   = "";
+    DOM.errContent.textContent = "";
+  }
+
+  // ─────────────────────────────────────────────
+  //  SAVE (CREATE + UPDATE)
+  //  FIX: Now correctly unwraps API response and
+  //  includes color + pinned in the payload
+  // ─────────────────────────────────────────────
+  DOM.saveBtn.addEventListener("click", async () => {
+    const title   = DOM.titleInput.value.trim();
+    const content = DOM.contentInput.value.trim();
+    let valid = true;
+
+    DOM.errTitle.textContent   = "";
+    DOM.errContent.textContent = "";
+    DOM.titleInput.style.outline   = "";
+    DOM.contentInput.style.outline = "";
+
+    if (!title) {
+      DOM.errTitle.textContent = "Title is required.";
+      DOM.titleInput.style.outline = "2px solid var(--danger)";
+      valid = false;
+    }
+    if (!content) {
+      DOM.errContent.textContent = "Content is required.";
+      DOM.contentInput.style.outline = "2px solid var(--danger)";
+      valid = false;
+    }
+    if (!valid) return;
+
+    const payload = {
+      title,
+      content,
+      color:  state.selectedColor,   // ← accent color included
+      pinned: DOM.pinCheckbox.checked, // ← pin state included
+    };
+
+    DOM.saveBtn.classList.add("loading");
+
+    try {
+      if (state.editingId) {
+        // UPDATE
+        const updated = await API.update(state.editingId, payload);
+        // FIX: updated is now the note object directly (not the envelope)
+        const idx = state.notes.findIndex(n => n.id === updated.id);
+        if (idx !== -1) state.notes[idx] = updated;
+        toast("Note updated ✓");
+      } else {
+        // CREATE
+        const created = await API.create(payload);
+        // FIX: created is now the note object directly (not the envelope)
+        state.notes.unshift(created);
+        toast("Note created ✓");
+      }
+      closeDrawer();
+      renderNotes();
+    } catch (e) {
+      toast(e.message || "Save failed.", "bad");
+    } finally {
+      DOM.saveBtn.classList.remove("loading");
+    }
+  });
+
+  // ─────────────────────────────────────────────
+  //  PIN TOGGLE
+  //  FIX: Now uses PATCH /notes/:id/pin (not PUT)
+  //  so it doesn't require title/content in body
+  // ─────────────────────────────────────────────
+  async function handlePin(id) {
+    const note = state.notes.find(n => n.id === id);
+    if (!note) return;
+    // Optimistic
+    note.pinned = !note.pinned;
+    renderNotes();
+    try {
+      const updated = await API.togglePin(id);
+      // Sync with server truth
+      const idx = state.notes.findIndex(n => n.id === id);
+      if (idx !== -1) state.notes[idx] = updated;
+      renderNotes();
+      toast(updated.pinned ? "Note pinned" : "Note unpinned");
+    } catch (e) {
+      // Rollback
+      note.pinned = !note.pinned;
+      renderNotes();
+      toast("Pin toggle failed.", "bad");
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  //  DELETE MODAL
+  // ─────────────────────────────────────────────
+  function openModal(id)  { state.deleteId = id; DOM.modalBg.classList.add("on"); }
+  function closeModal()   { state.deleteId = null; DOM.modalBg.classList.remove("on"); }
+
+  DOM.modalCancel.addEventListener("click", closeModal);
+  DOM.modalBg.addEventListener("click", e => { if (e.target === DOM.modalBg) closeModal(); });
+
+  DOM.modalConfirm.addEventListener("click", async () => {
+    const id = state.deleteId;
+    if (!id) return;
+    DOM.modalConfirm.classList.add("loading");
+    const snap = state.notes.find(n => n.id === id);
+    state.notes = state.notes.filter(n => n.id !== id);
+    renderNotes();
+    closeModal();
+    try {
+      await API.delete(id);
+      toast("Note deleted.");
+    } catch (e) {
+      if (snap) { state.notes.unshift(snap); renderNotes(); }
+      toast("Delete failed — note restored.", "bad");
+    } finally {
+      DOM.modalConfirm.classList.remove("loading");
+    }
+  });
+
+  // ─────────────────────────────────────────────
+  //  WIRE EVENTS
+  // ─────────────────────────────────────────────
+  DOM.newBtn.addEventListener("click",   () => openDrawer());
+  DOM.closeBtn.addEventListener("click", closeDrawer);
+  DOM.cancelBtn.addEventListener("click", closeDrawer);
+
+  DOM.search.addEventListener("input", e => {
+    state.query = e.target.value.trim();
+    renderNotes();
+  });
+
+  DOM.navItems.forEach(item => {
+    item.addEventListener("click", () => {
+      DOM.navItems.forEach(i => i.classList.remove("active"));
+      item.classList.add("active");
+      state.filter = item.dataset.filter;
+      DOM.pageTitle.textContent = state.filter === "pinned" ? "Pinned Notes" : "All Notes";
+      renderNotes();
+    });
+  });
+
+  // Color dots
+  DOM.colorDots.forEach(dot => {
+    dot.addEventListener("click", () => setColor(dot.dataset.color));
+  });
+
+  // Pin row
+  DOM.pinRow.addEventListener("click", () => {
+    DOM.pinRow.classList.toggle("active", DOM.pinCheckbox.checked);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", e => {
+    const typing = ["INPUT","TEXTAREA"].includes(document.activeElement.tagName);
+    if (e.key === "Escape") {
+      if (DOM.modalBg.classList.contains("on")) { closeModal(); return; }
+      if (DOM.drawer.classList.contains("open")) { closeDrawer(); return; }
+    }
+    if (e.key === "n" && !typing && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openDrawer(); }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && DOM.drawer.classList.contains("open")) {
+      DOM.saveBtn.click();
+    }
+  });
+
+  // ─────────────────────────────────────────────
+  //  INIT
+  //  FIX: state.notes = await API.fetchAll() now gets
+  //  the array, not the {ok,data,meta} wrapper object
+  // ─────────────────────────────────────────────
+  (async function init() {
+    try {
+      state.notes = await API.fetchAll();
+      renderNotes();
+    } catch (err) {
+      toast("Could not connect to server. Is Flask running?", "bad");
+      console.error("Init error:", err);
+    }
+  })();
+  // ─────────────────────────────────────────────
+  //  PROFILE PANEL — fully client-side, no backend calls
+  //  (FIX: previous version tried to fetch /account/profile and
+  //   /account/signout which don't exist in Flask → caused errors)
+  // ─────────────────────────────────────────────
+  const profileTrigger  = g("profile-trigger");
+  const profilePanel    = g("profile-panel");
+  const profileClose    = g("pp-close");
+  const profileChevron  = g("profile-chevron");
+  const ppThemeToggle   = g("pp-theme-toggle");
+  const ppThemeLabel    = g("pp-theme-label");
+  const ppTotal         = g("pp-total");
+  const ppPinned        = g("pp-pinned");
+
+  const viewMain     = g("pp-view-main");
+  const viewEdit     = g("pp-view-edit");
+  const viewSettings = g("pp-view-settings");
+  const ppOpenEdit     = g("pp-open-edit");
+  const ppOpenSettings = g("pp-open-settings");
+  const ppBackEdit     = g("pp-back-edit");
+  const ppBackSettings = g("pp-back-settings");
+  const ppNameInput    = g("pp-name-input");
+  const ppSaveName     = g("pp-save-name");
+  const ppNameDisplay  = g("pp-name-display");
+  const sbUserName     = g("sb-user-name");
+  const sbAvatarLetter = g("sb-avatar-letter");
+  const ppAvatarLg     = g("pp-avatar-lg");
+  const ppAnimToggle   = g("pp-anim-toggle");
+  const ppSignout      = g("pp-signout");
+
+  // ── FIX: "Loading Profile..." stuck text — load saved name instantly ──
+  function loadSavedName() {
+    const saved = localStorage.getItem("ns-username") || "Admin User";
+    sbUserName.textContent    = saved;
+    ppNameDisplay.textContent = saved;
+    ppNameInput.value         = saved;
+    const letter = saved.trim().charAt(0).toUpperCase() || "U";
+    sbAvatarLetter.textContent = letter;
+    ppAvatarLg.textContent     = letter;
+  }
+
+  // ── FIX: Save Name now just writes to localStorage, no fetch() call ──
+  ppSaveName.addEventListener("click", () => {
+    const name = ppNameInput.value.trim();
+    if (!name) { toast("Name cannot be empty.", "bad"); return; }
+    localStorage.setItem("ns-username", name);
+    loadSavedName();
+    toast("Profile updated ✓");
+    showView(viewMain);
+  });
+
+  // ── FIX: Animation toggle — controls real CSS, persisted in localStorage ──
+  function loadAnimSetting() {
+    const enabled = localStorage.getItem("ns-animations") !== "off";
+    ppAnimToggle.classList.toggle("on", enabled);
+    document.body.classList.toggle("no-anim", !enabled);
+  }
+  ppAnimToggle.addEventListener("click", () => {
+    const isOn = ppAnimToggle.classList.toggle("on");
+    localStorage.setItem("ns-animations", isOn ? "on" : "off");
+    document.body.classList.toggle("no-anim", !isOn);
+    toast(isOn ? "Animations enabled" : "Animations disabled");
+  });
+
+  // ── Sub-view switching ──
+  function showView(view) {
+    [viewMain, viewEdit, viewSettings].forEach(v => {
+      if (v === viewMain) v.style.display = (v === view) ? "block" : "none";
+      else v.classList.toggle("open", v === view);
+    });
+  }
+  ppOpenEdit.addEventListener("click", () => showView(viewEdit));
+  ppOpenSettings.addEventListener("click", () => showView(viewSettings));
+  ppBackEdit.addEventListener("click", () => showView(viewMain));
+  ppBackSettings.addEventListener("click", () => showView(viewMain));
+
+  function openProfile() {
+    profilePanel.classList.add("open");
+    profileChevron.style.transform = "rotate(180deg)";
+    ppTotal.textContent  = state.notes.length;
+    ppPinned.textContent = state.notes.filter(n => n.pinned).length;
+    const isDark = document.documentElement.dataset.theme !== "light";
+    ppThemeLabel.textContent = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
+    showView(viewMain);
+  }
+
+  function closeProfile() {
+    profilePanel.classList.remove("open");
+    profileChevron.style.transform = "rotate(0deg)";
+  }
+
+  profileTrigger.addEventListener("click", e => {
+    e.stopPropagation();
+    profilePanel.classList.contains("open") ? closeProfile() : openProfile();
+  });
+  profileClose.addEventListener("click", e => { e.stopPropagation(); closeProfile(); });
+
+  // ── FIX: Theme toggle — works correctly now that light theme CSS exists ──
+  ppThemeToggle.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("ns-theme", next);
+    ppThemeLabel.textContent = next === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode";
+  });
+
+  // ── FIX: Sign out — no longer navigates to a real (non-existent) route.
+  //   Just clears local data and resets the view, like a real client-side logout. ──
+  ppSignout.addEventListener("click", () => {
+    if (!confirm("Sign out of NoteStack?")) return;
+    localStorage.removeItem("ns-username");
+    localStorage.removeItem("ns-animations");
+    closeProfile();
+    loadSavedName();
+    toast("Signed out.");
+  });
+
+  document.addEventListener("click", e => {
+    if (profilePanel.classList.contains("open") &&
+        !profilePanel.contains(e.target) &&
+        !profileTrigger.contains(e.target)) {
+      closeProfile();
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && profilePanel.classList.contains("open")) closeProfile();
+  });
+
+  // Init profile state on page load
+  loadSavedName();
+  loadAnimSetting();
+  </script>
+</body>
+</html>
