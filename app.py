@@ -1,13 +1,27 @@
 """
-NoteStack – app.py  (v3 — single file frontend)
-All CSS and JS are now inline inside index.html, so Flask only needs
-to serve one file. No more missing style.css / script.js 404 errors.
+NoteStack – app.py  (v4 — persistent Postgres storage)
+─────────────────────────────────────────────────────────────────────────────
+WHY THIS CHANGED FROM SQLITE:
+Render's free web service plan uses an EPHEMERAL filesystem. Every time the
+app goes idle (~15 min of no traffic) it spins down, and the next request
+spins up a brand-new container with a clean disk. The old SQLite file
+(notestack.db) lived on that disk, so all notes were wiped on every cold
+restart — this is a hosting limitation, not a code bug.
+
+FIX: notes are now stored in Postgres (e.g. a free Supabase project), which
+lives outside the web service entirely and survives restarts/redeploys.
+
+Set the DATABASE_URL environment variable (on Render: Settings → Environment)
+to your Postgres connection string, e.g.:
+  postgresql://postgres:[PASSWORD]@db.xxxxx.supabase.co:5432/postgres
 """
 
 import os
-import sqlite3
 import logging
 from datetime import datetime, timezone
+
+import psycopg2
+import psycopg2.extras
 from flask import Flask, Blueprint, g, request, jsonify, current_app, send_from_directory
 from flask_cors import CORS
 
@@ -16,44 +30,57 @@ log = logging.getLogger("notestack")
 
 
 class Config:
-    BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-    DB_PATH   = os.path.join(BASE_DIR, "notestack.db")
-    PAGE_SIZE = 20
-    MAX_TITLE = 120
-    MAX_BODY  = 10_000
-    DEBUG     = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    SSLMODE      = os.environ.get("DB_SSLMODE", "require")  # "disable" for local Postgres
+    PAGE_SIZE    = 20
+    MAX_TITLE    = 120
+    MAX_BODY     = 10_000
+    DEBUG        = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DB_PATH"], detect_types=sqlite3.PARSE_DECLTYPES)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL;")
-        g.db.execute("PRAGMA foreign_keys=ON;")
+        if not current_app.config["DATABASE_URL"]:
+            raise RuntimeError(
+                "DATABASE_URL is not set. Add it as an environment variable "
+                "pointing to your Postgres connection string."
+            )
+        g.db = psycopg2.connect(
+            current_app.config["DATABASE_URL"],
+            sslmode=current_app.config["SSLMODE"],
+            cursor_factory=psycopg2.extras.RealDictCursor,
+        )
     return g.db
 
 def close_db(exc=None):
     db = g.pop("db", None)
-    if db: db.close()
+    if db:
+        db.close()
 
 def init_db(app):
     with app.app_context():
-        db = get_db()
-        db.executescript("""
+        if not app.config["DATABASE_URL"]:
+            log.warning("DATABASE_URL not set — skipping DB init. Set it before using the app.")
+            return
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS notes (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                title      TEXT    NOT NULL CHECK(length(title)   <= 120),
-                content    TEXT    NOT NULL CHECK(length(content) <= 10000),
-                pinned     INTEGER NOT NULL DEFAULT 0,
+                id         SERIAL PRIMARY KEY,
+                title      TEXT    NOT NULL CHECK (length(title)   <= 120),
+                content    TEXT    NOT NULL CHECK (length(content) <= 10000),
+                pinned     BOOLEAN NOT NULL DEFAULT FALSE,
                 color      TEXT    NOT NULL DEFAULT '#8B5CF6',
                 created_at TEXT    NOT NULL,
                 updated_at TEXT    NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_notes_pinned_id ON notes (pinned DESC, id DESC);
         """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_notes_pinned_id ON notes (pinned DESC, id DESC);")
         db.commit()
-        log.info("DB ready → %s", app.config["DB_PATH"])
+        cur.close()
+        close_db()
+        log.info("Postgres schema ready.")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,7 +113,7 @@ def validate(data):
     elif len(content) > 10000:  errors["content"] = "Content must be ≤ 10 000 characters."
     if color not in COLORS: color = "#8B5CF6"
     if errors: raise ValueError(errors)
-    return {"title": title, "content": content, "color": color, "pinned": int(pinned)}
+    return {"title": title, "content": content, "color": color, "pinned": pinned}
 
 
 # ── Blueprint ─────────────────────────────────────────────────────────────────
@@ -94,32 +121,50 @@ bp = Blueprint("notes", __name__, url_prefix="/notes")
 
 @bp.get("/")
 def list_notes():
-    db = get_db()
+    db  = get_db()
+    cur = db.cursor()
     q           = (request.args.get("q") or "").strip()
     page        = max(1, request.args.get("page", 1, type=int) or 1)
     per_page    = min(100, max(1, request.args.get("per_page", Config.PAGE_SIZE, type=int) or Config.PAGE_SIZE))
     offset      = (page - 1) * per_page
     pinned_only = request.args.get("pinned","").lower() in ("1","true","yes")
 
-    conds = []
-    if q:           conds.append("(title LIKE :q OR content LIKE :q)")
-    if pinned_only: conds.append("pinned = 1")
-    where  = f"WHERE {' AND '.join(conds)}" if conds else ""
+    conds  = []
     params = {"q": f"%{q}%", "limit": per_page, "offset": offset}
+    if q:           conds.append("(title ILIKE %(q)s OR content ILIKE %(q)s)")
+    if pinned_only: conds.append("pinned = TRUE")
+    where = f"WHERE {' AND '.join(conds)}" if conds else ""
 
-    total = db.execute(f"SELECT COUNT(*) FROM notes {where}", params).fetchone()[0]
-    rows  = db.execute(f"SELECT * FROM notes {where} ORDER BY pinned DESC, id DESC LIMIT :limit OFFSET :offset", params).fetchall()
-    return ok([note_dict(r) for r in rows], total=total, page=page, per_page=per_page, pages=max(1,(total+per_page-1)//per_page))
+    cur.execute(f"SELECT COUNT(*) AS c FROM notes {where}", params)
+    total = cur.fetchone()["c"]
+
+    cur.execute(
+        f"SELECT * FROM notes {where} ORDER BY pinned DESC, id DESC LIMIT %(limit)s OFFSET %(offset)s",
+        params,
+    )
+    rows = cur.fetchall()
+    cur.close()
+    return ok([note_dict(r) for r in rows], total=total, page=page, per_page=per_page,
+              pages=max(1, (total + per_page - 1) // per_page))
 
 @bp.get("/counts")
 def counts():
-    db = get_db()
-    return ok({"all": db.execute("SELECT COUNT(*) FROM notes").fetchone()[0],
-               "pinned": db.execute("SELECT COUNT(*) FROM notes WHERE pinned=1").fetchone()[0]})
+    db  = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT COUNT(*) AS c FROM notes")
+    total = cur.fetchone()["c"]
+    cur.execute("SELECT COUNT(*) AS c FROM notes WHERE pinned = TRUE")
+    pinned = cur.fetchone()["c"]
+    cur.close()
+    return ok({"all": total, "pinned": pinned})
 
 @bp.get("/<int:nid>")
 def get_note(nid):
-    row = get_db().execute("SELECT * FROM notes WHERE id=?", (nid,)).fetchone()
+    db  = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT * FROM notes WHERE id = %s", (nid,))
+    row = cur.fetchone()
+    cur.close()
     return ok(note_dict(row)) if row else err(f"Note #{nid} not found.", 404)
 
 @bp.post("/")
@@ -128,46 +173,78 @@ def create_note():
     if not data: return err("Request body must be JSON.", 415)
     try:    payload = validate(data)
     except ValueError as e: return err("Validation failed.", 422, fields=e.args[0])
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     db  = get_db()
-    cur = db.execute("INSERT INTO notes (title,content,color,pinned,created_at,updated_at) VALUES (:title,:content,:color,:pinned,:now,:now)", {**payload,"now":now})
+    cur = db.cursor()
+    cur.execute(
+        """INSERT INTO notes (title, content, color, pinned, created_at, updated_at)
+           VALUES (%(title)s, %(content)s, %(color)s, %(pinned)s, %(now)s, %(now)s)
+           RETURNING *""",
+        {**payload, "now": now},
+    )
+    row = cur.fetchone()
     db.commit()
-    row = db.execute("SELECT * FROM notes WHERE id=?", (cur.lastrowid,)).fetchone()
-    log.info("Created note #%d '%s'", row["id"], row["title"])
+    cur.close()
+    log.info("Created note #%s '%s'", row["id"], row["title"])
     return ok(note_dict(row), 201)
 
 @bp.put("/<int:nid>")
 def update_note(nid):
     db  = get_db()
-    if not db.execute("SELECT id FROM notes WHERE id=?", (nid,)).fetchone():
+    cur = db.cursor()
+    cur.execute("SELECT id FROM notes WHERE id = %s", (nid,))
+    if not cur.fetchone():
+        cur.close()
         return err(f"Note #{nid} not found.", 404)
+
     data = request.get_json(silent=True)
     if not data: return err("Request body must be JSON.", 415)
     try:    payload = validate(data)
     except ValueError as e: return err("Validation failed.", 422, fields=e.args[0])
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    db.execute("UPDATE notes SET title=:title,content=:content,color=:color,pinned=:pinned,updated_at=:now WHERE id=:id", {**payload,"now":now,"id":nid})
+    cur.execute(
+        """UPDATE notes SET title=%(title)s, content=%(content)s, color=%(color)s,
+           pinned=%(pinned)s, updated_at=%(now)s WHERE id=%(id)s RETURNING *""",
+        {**payload, "now": now, "id": nid},
+    )
+    row = cur.fetchone()
     db.commit()
-    return ok(note_dict(db.execute("SELECT * FROM notes WHERE id=?", (nid,)).fetchone()))
+    cur.close()
+    return ok(note_dict(row))
 
 @bp.patch("/<int:nid>/pin")
 def toggle_pin(nid):
     db  = get_db()
-    row = db.execute("SELECT pinned FROM notes WHERE id=?", (nid,)).fetchone()
-    if not row: return err(f"Note #{nid} not found.", 404)
+    cur = db.cursor()
+    cur.execute("SELECT pinned FROM notes WHERE id = %s", (nid,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        return err(f"Note #{nid} not found.", 404)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    db.execute("UPDATE notes SET pinned=?,updated_at=? WHERE id=?", (0 if row["pinned"] else 1, now, nid))
+    cur.execute(
+        "UPDATE notes SET pinned = %s, updated_at = %s WHERE id = %s RETURNING *",
+        (not row["pinned"], now, nid),
+    )
+    updated = cur.fetchone()
     db.commit()
-    return ok(note_dict(db.execute("SELECT * FROM notes WHERE id=?", (nid,)).fetchone()))
+    cur.close()
+    return ok(note_dict(updated))
 
 @bp.delete("/<int:nid>")
 def delete_note(nid):
     db  = get_db()
-    if not db.execute("SELECT id FROM notes WHERE id=?", (nid,)).fetchone():
+    cur = db.cursor()
+    cur.execute("SELECT id FROM notes WHERE id = %s", (nid,))
+    if not cur.fetchone():
+        cur.close()
         return err(f"Note #{nid} not found.", 404)
-    db.execute("DELETE FROM notes WHERE id=?", (nid,))
+    cur.execute("DELETE FROM notes WHERE id = %s", (nid,))
     db.commit()
-    log.info("Deleted note #%d", nid)
+    cur.close()
+    log.info("Deleted note #%s", nid)
     return ok({"id": nid, "deleted": True})
 
 
@@ -186,10 +263,13 @@ def create_app():
     @app.errorhandler(500)
     def internal(_): return err("Internal server error.", 500)
 
-    # Serve the single index.html file (CSS+JS are inline inside it)
     @app.get("/")
     def index():
         return send_from_directory(app.root_path, "index.html")
+
+    @app.get("/health")
+    def health():
+        return ok({"status": "ok", "version": "4.0.0", "db_configured": bool(app.config["DATABASE_URL"])})
 
     init_db(app)
     return app
@@ -198,4 +278,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=Config.DEBUG, port=5000, use_reloader=False)
+    app.run(debug=Config.DEBUG, port=int(os.environ.get("PORT", 5000)), use_reloader=False)
